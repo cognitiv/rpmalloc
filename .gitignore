@@ -15,6 +15,9 @@ local.properties
 build.ninja
 .vs
 .vscode
+.ccls-cache
+.cache
+compile_commands.json
 
 # Generated version
 version.c
