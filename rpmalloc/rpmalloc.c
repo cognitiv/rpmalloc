@@ -3590,6 +3590,33 @@ rpmalloc_heap_thread_set_current(rpmalloc_heap_t* heap) {
 	}
 }
 
+extern inline size_t
+rpmalloc_heap_get_total_size(rpmalloc_heap_t* heap) {
+	size_t total_size = 0;
+
+	heap_t* cur_heap = heap;
+	while (cur_heap) {
+		for (size_t i = 0; i < SIZE_CLASS_COUNT; i++) {
+			span_t* cur_span = cur_heap->full_span[i];
+
+      while (cur_span) {
+        total_size += cur_span->block_count * cur_span->block_size;
+        cur_span = cur_span->next;
+      }
+		}
+
+    span_t* cur_span = cur_heap->large_huge_span;
+    while (cur_span) {
+      total_size += cur_span->block_count * cur_span->block_size;
+      cur_span = cur_span->next;
+    }
+
+    cur_heap = cur_heap->next_heap;
+	}
+
+  return total_size;
+}
+
 #endif
 
 #if ENABLE_PRELOAD || ENABLE_OVERRIDE

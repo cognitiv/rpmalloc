@@ -362,6 +362,9 @@ rpmalloc_heap_free_all(rpmalloc_heap_t* heap);
 RPMALLOC_EXPORT void
 rpmalloc_heap_thread_set_current(rpmalloc_heap_t* heap);
 
+RPMALLOC_EXPORT size_t
+rpmalloc_heap_get_total_size(rpmalloc_heap_t* heap);
+
 #endif
 
 #ifdef __cplusplus
