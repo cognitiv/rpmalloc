@@ -3,7 +3,7 @@ set(RPMALLOC_HEADERS rpnew.h rpmalloc.h)
 add_library(rpmalloc rpmalloc.c)
 
 target_include_directories(rpmalloc PUBLIC
-  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<INSTALL_INTERFACE:include/rpmalloc>
 )
 

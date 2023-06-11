@@ -369,4 +369,139 @@ rpmalloc_heap_get_total_size(rpmalloc_heap_t* heap);
 
 #ifdef __cplusplus
 }
+
+#include <cstddef>     // std::size_t
+#include <cstdint>     // PTRDIFF_MAX
+#if (__cplusplus >= 201103L) || (_MSC_VER > 1900)  // C++11
+#include <type_traits> // std::true_type
+#include <utility>     // std::forward
+#endif
+
+template<class T> struct _rp_stl_allocator_common {
+  typedef T                 value_type;
+  typedef std::size_t       size_type;
+  typedef std::ptrdiff_t    difference_type;
+  typedef value_type&       reference;
+  typedef value_type const& const_reference;
+  typedef value_type*       pointer;
+  typedef value_type const* const_pointer;
+
+  #if ((__cplusplus >= 201103L) || (_MSC_VER > 1900))  // C++11
+  using propagate_on_container_copy_assignment = std::true_type;
+  using propagate_on_container_move_assignment = std::true_type;
+  using propagate_on_container_swap            = std::true_type;
+  template <class U, class ...Args> void construct(U* p, Args&& ...args) { ::new(p) U(std::forward<Args>(args)...); }
+  template <class U> void destroy(U* p) noexcept { p->~U(); }
+  #else
+  void construct(pointer p, value_type const& val) { ::new(p) value_type(val); }
+  void destroy(pointer p) { p->~value_type(); }
+  #endif
+
+  size_type     max_size() const noexcept { return (PTRDIFF_MAX/sizeof(value_type)); }
+  pointer       address(reference x) const        { return &x; }
+  const_pointer address(const_reference x) const  { return &x; }
+};
+
+template<class T> struct rp_stl_allocator : public _rp_stl_allocator_common<T> {
+  using typename _rp_stl_allocator_common<T>::size_type;
+  using typename _rp_stl_allocator_common<T>::value_type;
+  using typename _rp_stl_allocator_common<T>::pointer;
+  template <class U> struct rebind { typedef rp_stl_allocator<U> other; };
+
+  rp_stl_allocator()                                             noexcept = default;
+  rp_stl_allocator(const rp_stl_allocator&)                      noexcept = default;
+  template<class U> rp_stl_allocator(const rp_stl_allocator<U>&) noexcept { }
+  rp_stl_allocator  select_on_container_copy_construction() const { return *this; }
+  void              deallocate(T* p, size_type) { rpfree(p); }
+
+  #if (__cplusplus >= 201703L)  // C++17
+  [[nodiscard]] T* allocate(size_type count) { return static_cast<T*>(rpcalloc(count, sizeof(T))); }
+  [[nodiscard]] T* allocate(size_type count, const void*) { return allocate(count); }
+  #else
+  [[nodiscard]] pointer allocate(size_type count, const void* = 0) { return static_cast<pointer>(rpcalloc(count, sizeof(value_type))); }
+  #endif
+
+  #if ((__cplusplus >= 201103L) || (_MSC_VER > 1900))  // C++11
+  using is_always_equal = std::true_type;
+  #endif
+};
+
+
+template<class T1,class T2> bool operator==(const rp_stl_allocator<T1>& , const rp_stl_allocator<T2>& ) noexcept { return true; }
+template<class T1,class T2> bool operator!=(const rp_stl_allocator<T1>& , const rp_stl_allocator<T2>& ) noexcept { return false; }
+
+#ifdef RPMALLOC_FIRST_CLASS_HEAPS
+
+#if (__cplusplus >= 201103L) || (_MSC_VER >= 1900)  // C++11
+#define MI_HAS_HEAP_STL_ALLOCATOR 1
+
+#include <memory>      // std::shared_ptr
+
+// Common base class for STL allocators in a specific heap
+template<class T> struct _rp_heap_stl_allocator_common : public _rp_stl_allocator_common<T> {
+  using typename _rp_stl_allocator_common<T>::size_type;
+  using typename _rp_stl_allocator_common<T>::value_type;
+  using typename _rp_stl_allocator_common<T>::pointer;
+
+  /** Construct allocator that uses a known heap. Heap will NOT be destroyed after use. */
+  _rp_heap_stl_allocator_common(rpmalloc_heap_t* hp)
+  : heap_(hp)
+  , refs_(new uint64_t(2)) // ref of 2 prevents delete
+	{ }
+
+	~_rp_heap_stl_allocator_common() {
+		if (--(*refs_) == 0) {
+			rpmalloc_heap_free_all(heap_);
+			rpmalloc_heap_release(heap_);
+			delete refs_;
+		}
+	}
+
+  #if (__cplusplus >= 201703L)  // C++17
+  [[nodiscard]] T* allocate(size_type count) { return static_cast<T*>(repmalloc_heap_calloc(heap_, count, sizeof(T))); }
+  [[nodiscard]] T* allocate(size_type count, const void*) { return allocate(count); }
+  #else
+  [[nodiscard]] pointer allocate(size_type count, const void* = 0) { return static_cast<pointer>(rpmalloc_heap_calloc(heap_, count, sizeof(value_type))); }
+  #endif
+
+  #if ((__cplusplus >= 201103L) || (_MSC_VER > 1900))  // C++11
+  using is_always_equal = std::false_type;
+  #endif
+
+  void collect(bool force) { }
+  template<class U> bool is_equal(const _rp_heap_stl_allocator_common<U>& x) const { return (heap_ == x.heap_); }
+
+protected:
+  rpmalloc_heap_t* heap_;
+	uint64_t* refs_;
+  template<class U> friend struct _rp_heap_stl_allocator_common;
+  
+  _rp_heap_stl_allocator_common()
+		: refs_(new uint64_t(1))
+	{
+    rpmalloc_heap_t* hp = rpmalloc_heap_acquire();
+  }
+
+  _rp_heap_stl_allocator_common(const _rp_heap_stl_allocator_common& x) noexcept : heap_(x.heap_), refs_(x.refs_) { (*x.refs_)++; }
+
+  template<class U> _rp_heap_stl_allocator_common(const _rp_heap_stl_allocator_common<U>& x) noexcept : heap_(x.heap_), refs_(x.refs_) { (*x.refs_)++; }
+};
+
+// STL allocator allocation in a specific heap
+template<class T> struct rp_heap_stl_allocator : public _rp_heap_stl_allocator_common<T> {
+  using typename _rp_heap_stl_allocator_common<T>::size_type;
+  rp_heap_stl_allocator() : _rp_heap_stl_allocator_common<T>() { }
+  rp_heap_stl_allocator(rpmalloc_heap_t* hp) : _rp_heap_stl_allocator_common<T>(hp) { }
+  template<class U> rp_heap_stl_allocator(const rp_heap_stl_allocator<U>& x) noexcept : _rp_heap_stl_allocator_common<T>(x) { }
+
+  rp_heap_stl_allocator select_on_container_copy_construction() const { return *this; }
+  void deallocate(T* p, size_type) { rpfree(p); }
+  template<class U> struct rebind { typedef rp_heap_stl_allocator<U> other; };
+};
+
+template<class T1, class T2> bool operator==(const rp_heap_stl_allocator<T1>& x, const rp_heap_stl_allocator<T2>& y) noexcept { return (x.is_equal(y)); }
+template<class T1, class T2> bool operator!=(const rp_heap_stl_allocator<T1>& x, const rp_heap_stl_allocator<T2>& y) noexcept { return (!x.is_equal(y)); }
+
+#endif // C++11
+#endif // RPMALLOC_FIRST_CLASS_HEAPS
 #endif

@@ -14,9 +14,10 @@
 #pragma GCC diagnostic ignored "-Wunused-result"
 #endif
 
+#define _GNU_SOURCE
 #include <rpmalloc.h>
-#include <thread.h>
-#include <test.h>
+#include "thread.h"
+#include "test.h"
 
 #include <fcntl.h>
 #include <stdint.h>

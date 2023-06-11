@@ -7,8 +7,8 @@
 #ifdef _WIN32
 #include <rpnew.h>
 #endif
-#include <thread.h>
-#include <test.h>
+#include "thread.h"
+#include "test.h"
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -184,7 +184,7 @@ test_run(int argc, char** argv) {
 #  include <sched.h>
 #endif
 
-#if !defined(NO_MAIN)
+#ifndef NO_MAIN
 
 int
 main(int argc, char** argv) {

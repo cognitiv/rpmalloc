@@ -3,10 +3,10 @@ project(rpmalloc
   VERSION 1.4.5
   DESCRIPTION "A library for efficient similarity search and clustering of dense vectors."
   HOMEPAGE_URL "Public domain cross platform lock free thread caching 16-byte aligned memory allocator implemented in C"
-  LANGUAGES C)
+  LANGUAGES CXX C)
 include(GNUInstallDirs)
 
-set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(BUILD_TESTS "Build Tests" ON)
@@ -41,8 +41,6 @@ endif()
 
 add_subdirectory(rpmalloc)
 
-# CTest must be included in the top level to enable `make test` target.
-include(CTest)
 if (BUILD_TESTS)
   add_subdirectory(test)
 endif()

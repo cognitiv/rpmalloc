@@ -3598,7 +3598,6 @@ rpmalloc_heap_get_total_size(rpmalloc_heap_t* heap) {
 	while (cur_heap) {
 		for (size_t i = 0; i < SIZE_CLASS_COUNT; i++) {
 			span_t* cur_span = cur_heap->full_span[i];
-
       while (cur_span) {
         total_size += cur_span->block_count * cur_span->block_size;
         cur_span = cur_span->next;
