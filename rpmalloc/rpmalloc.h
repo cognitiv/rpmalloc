@@ -430,7 +430,7 @@ template<class T> struct rp_stl_allocator : public _rp_stl_allocator_common<T> {
 template<class T1,class T2> bool operator==(const rp_stl_allocator<T1>& , const rp_stl_allocator<T2>& ) noexcept { return true; }
 template<class T1,class T2> bool operator!=(const rp_stl_allocator<T1>& , const rp_stl_allocator<T2>& ) noexcept { return false; }
 
-#ifdef RPMALLOC_FIRST_CLASS_HEAPS
+#if RPMALLOC_FIRST_CLASS_HEAPS
 
 #if (__cplusplus >= 201103L) || (_MSC_VER >= 1900)  // C++11
 #define MI_HAS_HEAP_STL_ALLOCATOR 1
