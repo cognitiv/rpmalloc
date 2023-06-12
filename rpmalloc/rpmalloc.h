@@ -445,23 +445,13 @@ template<class T> struct _rp_heap_stl_allocator_common : public _rp_stl_allocato
 
   /** Construct allocator that uses a known heap. Heap will NOT be destroyed after use. */
   _rp_heap_stl_allocator_common(rpmalloc_heap_t* hp)
-  : heap_(hp)
-  , refs_(new uint64_t(2)) // ref of 2 prevents delete
-	{ }
-
-	~_rp_heap_stl_allocator_common() {
-		if (--(*refs_) == 0) {
-			rpmalloc_heap_free_all(heap_);
-			rpmalloc_heap_release(heap_);
-			delete refs_;
-		}
-	}
+  : heap_(hp, heap_deleter(false)) {}
 
   #if (__cplusplus >= 201703L)  // C++17
-  [[nodiscard]] T* allocate(size_type count) { return static_cast<T*>(repmalloc_heap_calloc(heap_, count, sizeof(T))); }
+  [[nodiscard]] T* allocate(size_type count) { return static_cast<T*>(repmalloc_heap_calloc(heap_.get(), count, sizeof(T))); }
   [[nodiscard]] T* allocate(size_type count, const void*) { return allocate(count); }
   #else
-  [[nodiscard]] pointer allocate(size_type count, const void* = 0) { return static_cast<pointer>(rpmalloc_heap_calloc(heap_, count, sizeof(value_type))); }
+  [[nodiscard]] pointer allocate(size_type count, const void* = 0) { return static_cast<pointer>(rpmalloc_heap_calloc(heap_.get(), count, sizeof(value_type))); }
   #endif
 
   #if ((__cplusplus >= 201103L) || (_MSC_VER > 1900))  // C++11
@@ -472,19 +462,35 @@ template<class T> struct _rp_heap_stl_allocator_common : public _rp_stl_allocato
   template<class U> bool is_equal(const _rp_heap_stl_allocator_common<U>& x) const { return (heap_ == x.heap_); }
 
 protected:
-  rpmalloc_heap_t* heap_;
-	uint64_t* refs_;
   template<class U> friend struct _rp_heap_stl_allocator_common;
+
+	struct heap_deleter {
+		heap_deleter(bool owner)
+			: owner_(owner)
+		{
+		}
+
+		void operator()(rpmalloc_heap_t* heap) const {
+			if (owner_) {
+				rpmalloc_heap_free_all(heap);
+				rpmalloc_heap_release(heap);
+			}
+		}
+
+	private:
+		const bool owner_;
+	};
+
+	std::shared_ptr<rpmalloc_heap_t> heap_;
   
   _rp_heap_stl_allocator_common()
-		: refs_(new uint64_t(1))
-	{
-    rpmalloc_heap_t* hp = rpmalloc_heap_acquire();
-  }
+		: heap_(rpmalloc_heap_acquire(), heap_deleter(true)) {}
 
-  _rp_heap_stl_allocator_common(const _rp_heap_stl_allocator_common& x) noexcept : heap_(x.heap_), refs_(x.refs_) { (*x.refs_)++; }
+  _rp_heap_stl_allocator_common(const _rp_heap_stl_allocator_common& x) noexcept : heap_(x.heap_) {}
 
-  template<class U> _rp_heap_stl_allocator_common(const _rp_heap_stl_allocator_common<U>& x) noexcept : heap_(x.heap_), refs_(x.refs_) { (*x.refs_)++; }
+  _rp_heap_stl_allocator_common(_rp_heap_stl_allocator_common&& x) noexcept : heap_(x.heap_) {}
+
+  template<class U> _rp_heap_stl_allocator_common(const _rp_heap_stl_allocator_common<U>& x) noexcept : heap_(x.heap_) {}
 };
 
 // STL allocator allocation in a specific heap
