@@ -447,6 +447,15 @@ template<class T> struct _rp_heap_stl_allocator_common : public _rp_stl_allocato
   _rp_heap_stl_allocator_common(rpmalloc_heap_t* hp)
   : heap_(hp, heap_deleter(false)) {}
 
+  _rp_heap_stl_allocator_common& operator=(const _rp_heap_stl_allocator_common& other) {
+		if (&other == this) {
+			return *this;
+		}
+
+		heap_ = other.heap_;
+		return *this;
+	}
+
   #if (__cplusplus >= 201703L)  // C++17
   [[nodiscard]] T* allocate(size_type count) { return static_cast<T*>(repmalloc_heap_calloc(heap_.get(), count, sizeof(T))); }
   [[nodiscard]] T* allocate(size_type count, const void*) { return allocate(count); }
@@ -503,6 +512,11 @@ template<class T> struct rp_heap_stl_allocator : public _rp_heap_stl_allocator_c
   rp_heap_stl_allocator select_on_container_copy_construction() const { return *this; }
   void deallocate(T* p, size_type) { rpfree(p); }
   template<class U> struct rebind { typedef rp_heap_stl_allocator<U> other; };
+
+  rp_heap_stl_allocator& operator=(const rp_heap_stl_allocator& other) {
+		rp_heap_stl_allocator::operator=(other);
+		return *this;
+	}
 };
 
 template<class T1, class T2> bool operator==(const rp_heap_stl_allocator<T1>& x, const rp_heap_stl_allocator<T2>& y) noexcept { return (x.is_equal(y)); }

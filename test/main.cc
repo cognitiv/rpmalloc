@@ -12,6 +12,9 @@ int main(int argc, char** argv) {
 	std::vector<int, rp_heap_stl_allocator<int>> vec(alloc);
 
 	vec.resize(1024);
+	std::vector<int, rp_heap_stl_allocator<int>> copy = vec;
+	printf("%lu vs %lu\n", vec.size(), copy.size());
+
 	rpmalloc_heap_free_all(heap);
 	rpmalloc_heap_release(heap);
 	
