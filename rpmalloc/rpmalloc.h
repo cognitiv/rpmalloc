@@ -514,7 +514,7 @@ template<class T> struct rp_heap_stl_allocator : public _rp_heap_stl_allocator_c
   template<class U> struct rebind { typedef rp_heap_stl_allocator<U> other; };
 
   rp_heap_stl_allocator& operator=(const rp_heap_stl_allocator& other) {
-		rp_heap_stl_allocator::operator=(other);
+		_rp_heap_stl_allocator_common<T>::operator=(other);
 		return *this;
 	}
 };
