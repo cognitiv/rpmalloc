@@ -19,6 +19,9 @@ int main(int argc, char** argv) {
 	rpmalloc_managed_heap other_heap(std::in_place_t{});
 	heap.set_heap_for_copy(other_heap);
 
+	auto uptr = heap.make_unique<int>();
+	auto sptr = heap.make_shared<int>();
+
 	std::vector<int, rp_heap_stl_allocator<int>> copy = vec;
 	printf("%lu vs %lu | heap_used: %lu vs %lu, heap total: %lu vs %lu\n",
 			vec.size(), copy.size(),

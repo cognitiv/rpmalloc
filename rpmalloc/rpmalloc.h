@@ -450,6 +450,9 @@ struct rpmalloc_deleter {
 	}
 };
 
+template<typename T>
+using rpmalloc_unique_ptr = std::unique_ptr<T, rpmalloc_deleter<T>>;
+
 /** Provides container for managing a first class rmpalloc heap.
  *
  * By default the unique heap is empty (nullptr), it must be initialized with std::in_place_t to
@@ -520,7 +523,7 @@ struct rpmalloc_managed_heap {
 	}
 
 	template<typename T, typename... Args>
-	inline std::unique_ptr<T, rpmalloc_deleter<T>> make_unique(Args&&... args)
+	inline rpmalloc_unique_ptr<T> make_unique(Args&&... args)
 	{
 		return std::unique_ptr<T, rpmalloc_deleter<T>>(
 			new(rpmalloc_heap_alloc(storage_->active, sizeof(T))) T(std::forward<Args>(args)...));
