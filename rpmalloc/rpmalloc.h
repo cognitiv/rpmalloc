@@ -450,29 +450,29 @@ template<class T1,class T2> bool operator!=(const rp_stl_allocator<T1>& , const 
  *
  * This data-structure is not thread-safe, just as the heap itself is not thread-safe.
  */
-struct rpmalloc_unique_heap {
-	rpmalloc_unique_heap() = default;
+struct rpmalloc_managed_heap {
+	rpmalloc_managed_heap() = default;
 
-	explicit rpmalloc_unique_heap(std::in_place_t t)
+	explicit rpmalloc_managed_heap(std::in_place_t t)
 		: storage_(new storage()) {}
 
-	rpmalloc_unique_heap(const rpmalloc_unique_heap& other)
+	rpmalloc_managed_heap(const rpmalloc_managed_heap& other)
 	{
 		storage_ = other.use_current_heap_on_copy() ? other.storage_ : other.storage_->heap_for_copy;
 		storage_->increment();
 	};
 
-	rpmalloc_unique_heap(rpmalloc_unique_heap&& other) = delete;
+	rpmalloc_managed_heap(rpmalloc_managed_heap&& other) = delete;
 
-	~rpmalloc_unique_heap() {
+	~rpmalloc_managed_heap() {
 		if (storage_) {
 			storage_->decrement();
 		}
 	}
 
-	rpmalloc_unique_heap& operator=(rpmalloc_unique_heap&& other) = delete;
+	rpmalloc_managed_heap& operator=(rpmalloc_managed_heap&& other) = delete;
 
-	rpmalloc_unique_heap& operator=(const rpmalloc_unique_heap& other)
+	rpmalloc_managed_heap& operator=(const rpmalloc_managed_heap& other)
 	{
 		if (&other == this) {
 			return *this;
@@ -496,7 +496,7 @@ struct rpmalloc_unique_heap {
 		}
 	}
 
-	void set_heap_for_copy(const rpmalloc_unique_heap& heap) {
+	void set_heap_for_copy(const rpmalloc_managed_heap& heap) {
 		if (storage_ == nullptr) {
 			throw std::invalid_argument("Current smart heap is null");
 		}
@@ -572,7 +572,7 @@ template<class T> struct _rp_heap_stl_allocator_common : public _rp_stl_allocato
   using typename _rp_stl_allocator_common<T>::value_type;
   using typename _rp_stl_allocator_common<T>::pointer;
 
-  _rp_heap_stl_allocator_common(const rpmalloc_unique_heap& hp)
+  _rp_heap_stl_allocator_common(const rpmalloc_managed_heap& hp)
   : heap_(hp) {}
 
   _rp_heap_stl_allocator_common& operator=(const _rp_heap_stl_allocator_common& other) {
@@ -602,7 +602,7 @@ template<class T> struct _rp_heap_stl_allocator_common : public _rp_stl_allocato
 protected:
   template<class U> friend struct _rp_heap_stl_allocator_common;
 
-	rpmalloc_unique_heap heap_;
+	rpmalloc_managed_heap heap_;
   
   _rp_heap_stl_allocator_common() {}
 
@@ -617,7 +617,7 @@ protected:
 template<class T> struct rp_heap_stl_allocator : public _rp_heap_stl_allocator_common<T> {
   using typename _rp_heap_stl_allocator_common<T>::size_type;
   rp_heap_stl_allocator() : _rp_heap_stl_allocator_common<T>() { }
-  rp_heap_stl_allocator(const rpmalloc_unique_heap& hp) : _rp_heap_stl_allocator_common<T>(hp) { }
+  rp_heap_stl_allocator(const rpmalloc_managed_heap& hp) : _rp_heap_stl_allocator_common<T>(hp) { }
   template<class U> rp_heap_stl_allocator(const rp_heap_stl_allocator<U>& x) noexcept : _rp_heap_stl_allocator_common<T>(x) { }
 
   rp_heap_stl_allocator select_on_container_copy_construction() const { return *this; }
