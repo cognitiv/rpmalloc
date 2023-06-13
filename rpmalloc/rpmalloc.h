@@ -363,6 +363,9 @@ RPMALLOC_EXPORT void
 rpmalloc_heap_thread_set_current(rpmalloc_heap_t* heap);
 
 RPMALLOC_EXPORT size_t
+rpmalloc_heap_get_used_size(rpmalloc_heap_t* heap);
+
+RPMALLOC_EXPORT size_t
 rpmalloc_heap_get_total_size(rpmalloc_heap_t* heap);
 
 #endif
@@ -435,7 +438,133 @@ template<class T1,class T2> bool operator!=(const rp_stl_allocator<T1>& , const 
 #if (__cplusplus >= 201103L) || (_MSC_VER >= 1900)  // C++11
 #define MI_HAS_HEAP_STL_ALLOCATOR 1
 
-#include <memory>      // std::shared_ptr
+#include <memory>      // std::shared_pt
+#include <utility>
+#include <stdexcept>
+
+/** Provides container for managing a first class rmpalloc heap.
+ *
+ * By default the unique heap is empty (nullptr), it must be initialized with std::in_place_t to
+ * create a usable heap. By default on copy the source heap will be used for the dest heap. Users
+ * may optionally declare a different heap to be used on copy using (set_heap_on_copy()).
+ *
+ * This data-structure is not thread-safe, just as the heap itself is not thread-safe.
+ */
+struct rpmalloc_unique_heap {
+	rpmalloc_unique_heap() = default;
+
+	explicit rpmalloc_unique_heap(std::in_place_t t)
+		: storage_(new storage()) {}
+
+	rpmalloc_unique_heap(const rpmalloc_unique_heap& other)
+	{
+		storage_ = other.use_current_heap_on_copy() ? other.storage_ : other.storage_->heap_for_copy;
+		storage_->increment();
+	};
+
+	rpmalloc_unique_heap(rpmalloc_unique_heap&& other) = delete;
+
+	~rpmalloc_unique_heap() {
+		if (storage_) {
+			storage_->decrement();
+		}
+	}
+
+	rpmalloc_unique_heap& operator=(rpmalloc_unique_heap&& other) = delete;
+
+	rpmalloc_unique_heap& operator=(const rpmalloc_unique_heap& other)
+	{
+		if (&other == this) {
+			return *this;
+		}
+
+		if (storage_) {
+			storage_->decrement();
+		}
+
+		storage_ = other.use_current_heap_on_copy() ? other.storage_ : other.storage_->heap_for_copy;
+		storage_->increment();
+		return *this;
+	}
+
+	rpmalloc_heap_t* get() const { return storage_->active; }
+
+	void reset_copy() {
+		if (storage_ && storage_->heap_for_copy) {
+			storage_->heap_for_copy->decrement();
+			storage_->heap_for_copy = nullptr;
+		}
+	}
+
+	void set_heap_for_copy(const rpmalloc_unique_heap& heap) {
+		if (storage_ == nullptr) {
+			throw std::invalid_argument("Current smart heap is null");
+		}
+
+		if (storage_->heap_for_copy) {
+			storage_->heap_for_copy->decrement();
+		}
+
+		storage_->heap_for_copy = heap.storage_;
+		if (storage_->heap_for_copy) {
+			storage_->heap_for_copy->increment();
+		}
+	}
+
+	template<typename T, typename... Args>
+	inline T* new_T(Args&&... args)
+	{
+		return new(rpmalloc_heap_alloc(storage_->active, sizeof(T))) T(std::forward<Args>(args)...);
+	}
+
+	size_t get_used_size() const {
+		if (storage_) {
+			return rpmalloc_heap_get_used_size(storage_->active);
+		}
+
+		return 0;
+	}
+
+	size_t get_total_size() const {
+		if (storage_) {
+			return rpmalloc_heap_get_total_size(storage_->active);
+		}
+
+		return 0;
+	}
+
+private:
+	struct storage {
+		rpmalloc_heap_t* active;
+		storage* heap_for_copy;
+
+		storage()
+			: active(rpmalloc_heap_acquire())
+			, heap_for_copy(nullptr)
+		{}
+
+		void increment() { ++ref_count_; }
+
+		void decrement() {
+			if (--ref_count_ == 0) {
+				if (heap_for_copy) {
+					heap_for_copy->decrement();
+				}
+
+				rpmalloc_heap_free_all(active);
+				rpmalloc_heap_release(active);
+				delete this;
+			}
+		}
+
+		private:
+			uint64_t ref_count_ = 1;
+	};
+
+	storage* storage_ = nullptr;
+
+	bool use_current_heap_on_copy () const { return storage_ == nullptr || storage_->heap_for_copy == nullptr; }
+};
 
 // Common base class for STL allocators in a specific heap
 template<class T> struct _rp_heap_stl_allocator_common : public _rp_stl_allocator_common<T> {
@@ -443,9 +572,8 @@ template<class T> struct _rp_heap_stl_allocator_common : public _rp_stl_allocato
   using typename _rp_stl_allocator_common<T>::value_type;
   using typename _rp_stl_allocator_common<T>::pointer;
 
-  /** Construct allocator that uses a known heap. Heap will NOT be destroyed after use. */
-  _rp_heap_stl_allocator_common(rpmalloc_heap_t* hp)
-  : heap_(hp, heap_deleter(false)) {}
+  _rp_heap_stl_allocator_common(const rpmalloc_unique_heap& hp)
+  : heap_(hp) {}
 
   _rp_heap_stl_allocator_common& operator=(const _rp_heap_stl_allocator_common& other) {
 		if (&other == this) {
@@ -457,7 +585,8 @@ template<class T> struct _rp_heap_stl_allocator_common : public _rp_stl_allocato
 	}
 
   #if (__cplusplus >= 201703L)  // C++17
-  [[nodiscard]] T* allocate(size_type count) { return static_cast<T*>(repmalloc_heap_calloc(heap_.get(), count, sizeof(T))); }
+  [[nodiscard]] T* allocate(size_type count) {
+		return static_cast<T*>(rpmalloc_heap_calloc(heap_.get(), count, sizeof(T))); }
   [[nodiscard]] T* allocate(size_type count, const void*) { return allocate(count); }
   #else
   [[nodiscard]] pointer allocate(size_type count, const void* = 0) { return static_cast<pointer>(rpmalloc_heap_calloc(heap_.get(), count, sizeof(value_type))); }
@@ -473,27 +602,9 @@ template<class T> struct _rp_heap_stl_allocator_common : public _rp_stl_allocato
 protected:
   template<class U> friend struct _rp_heap_stl_allocator_common;
 
-	struct heap_deleter {
-		heap_deleter(bool owner)
-			: owner_(owner)
-		{
-		}
-
-		void operator()(rpmalloc_heap_t* heap) const {
-			if (owner_) {
-				rpmalloc_heap_free_all(heap);
-				rpmalloc_heap_release(heap);
-			}
-		}
-
-	private:
-		const bool owner_;
-	};
-
-	std::shared_ptr<rpmalloc_heap_t> heap_;
+	rpmalloc_unique_heap heap_;
   
-  _rp_heap_stl_allocator_common()
-		: heap_(rpmalloc_heap_acquire(), heap_deleter(true)) {}
+  _rp_heap_stl_allocator_common() {}
 
   _rp_heap_stl_allocator_common(const _rp_heap_stl_allocator_common& x) noexcept : heap_(x.heap_) {}
 
@@ -506,7 +617,7 @@ protected:
 template<class T> struct rp_heap_stl_allocator : public _rp_heap_stl_allocator_common<T> {
   using typename _rp_heap_stl_allocator_common<T>::size_type;
   rp_heap_stl_allocator() : _rp_heap_stl_allocator_common<T>() { }
-  rp_heap_stl_allocator(rpmalloc_heap_t* hp) : _rp_heap_stl_allocator_common<T>(hp) { }
+  rp_heap_stl_allocator(const rpmalloc_unique_heap& hp) : _rp_heap_stl_allocator_common<T>(hp) { }
   template<class U> rp_heap_stl_allocator(const rp_heap_stl_allocator<U>& x) noexcept : _rp_heap_stl_allocator_common<T>(x) { }
 
   rp_heap_stl_allocator select_on_container_copy_construction() const { return *this; }

@@ -610,6 +610,10 @@ struct heap_t {
 	//! Number of bytes transitioned global -> thread
 	atomic64_t   global_to_thread;
 #endif
+#if RPMALLOC_FIRST_CLASS_HEAPS
+	//! Allocation stats per size class
+	uint64_t size_class_current_use[SIZE_CLASS_COUNT + 1];
+#endif
 };
 
 // Size class for defining a block size bucket
@@ -2194,7 +2198,12 @@ _rpmalloc_allocate_small(heap_t* heap, size_t size) {
 	//Small sizes have unique size classes
 	const uint32_t class_idx = (uint32_t)((size + (SMALL_GRANULARITY - 1)) >> SMALL_GRANULARITY_SHIFT);
 	heap_size_class_t* heap_size_class = heap->size_class + class_idx;
+
 	_rpmalloc_stat_inc_alloc(heap, class_idx);
+#if RPMALLOC_FIRST_CLASS_HEAPS
+  ++heap->size_class_current_use[class_idx];
+#endif
+
 	if (EXPECTED(heap_size_class->free_list != 0))
 		return free_list_pop(&heap_size_class->free_list);
 	return _rpmalloc_allocate_from_heap_fallback(heap, heap_size_class, class_idx);
@@ -2208,7 +2217,12 @@ _rpmalloc_allocate_medium(heap_t* heap, size_t size) {
 	const uint32_t base_idx = (uint32_t)(SMALL_CLASS_COUNT + ((size - (SMALL_SIZE_LIMIT + 1)) >> MEDIUM_GRANULARITY_SHIFT));
 	const uint32_t class_idx = _memory_size_class[base_idx].class_idx;
 	heap_size_class_t* heap_size_class = heap->size_class + class_idx;
+
 	_rpmalloc_stat_inc_alloc(heap, class_idx);
+#if RPMALLOC_FIRST_CLASS_HEAPS
+  ++heap->size_class_current_use[class_idx];
+#endif
+
 	if (EXPECTED(heap_size_class->free_list != 0))
 		return free_list_pop(&heap_size_class->free_list);
 	return _rpmalloc_allocate_from_heap_fallback(heap, heap_size_class, class_idx);
@@ -2480,6 +2494,10 @@ _rpmalloc_deallocate_defer_small_or_medium(span_t* span, void* block) {
 static void
 _rpmalloc_deallocate_small_or_medium(span_t* span, void* p) {
 	_rpmalloc_stat_inc_free(span->heap, span->size_class);
+#if RPMALLOC_FIRST_CLASS_HEAPS
+  --span->heap->size_class_current_use[span->size_class];
+#endif
+  
 	if (span->flags & SPAN_FLAG_ALIGNED_BLOCKS) {
 		//Realign pointer to block start
 		void* blocks_start = pointer_offset(span, SPAN_HEADER_SIZE);
@@ -3591,28 +3609,90 @@ rpmalloc_heap_thread_set_current(rpmalloc_heap_t* heap) {
 }
 
 extern inline size_t
+rpmalloc_heap_get_used_size(rpmalloc_heap_t* heap) {
+	size_t total_size = 0;
+  for (size_t i = 0; i < (sizeof(heap->size_class_current_use) / sizeof(uint64_t)); i++) {
+    if (heap->size_class_current_use[i] > 0) {
+      total_size += heap->size_class_current_use[i] * _memory_size_class[i].block_size;
+    }
+  }
+
+   // last aggregate all fully utilized (large/huge) spans, there are no partials for this span class
+  span_t* cur_span = heap->large_huge_span;
+  while (cur_span) {
+    if (cur_span->size_class == SIZE_CLASS_LARGE) {
+      total_size += cur_span->span_count * _memory_span_size;
+    } else {
+      total_size += cur_span->span_count * _memory_page_size;
+    }
+    cur_span = cur_span->next;
+  }
+
+  return total_size;
+}
+
+extern inline size_t
 rpmalloc_heap_get_total_size(rpmalloc_heap_t* heap) {
 	size_t total_size = 0;
 
-	heap_t* cur_heap = heap;
-	while (cur_heap) {
-		for (size_t i = 0; i < SIZE_CLASS_COUNT; i++) {
-			span_t* cur_span = cur_heap->full_span[i];
-      while (cur_span) {
-        total_size += cur_span->block_count * cur_span->block_size;
-        cur_span = cur_span->next;
-      }
-		}
+  for (size_t i = 0; i < SIZE_CLASS_COUNT; i++) {
+    span_t* cur_span = heap->full_span[i];
 
-    span_t* cur_span = cur_heap->large_huge_span;
+    // first aggregate all fully utilized (small/medium) spans
     while (cur_span) {
-      total_size += cur_span->block_count * cur_span->block_size;
+      total_size += _memory_span_size;
       cur_span = cur_span->next;
     }
 
-    cur_heap = cur_heap->next_heap;
-	}
+    // next aggregate all partially utilized (small/medium) spans
+    cur_span = heap->size_class[i].partial_span;
+    while (cur_span) {
+      total_size += _memory_span_size;
+      cur_span = cur_span->next;
+    }
 
+    // check for cached span (last span released)
+    if (heap->size_class[i].cache) {
+      total_size += _memory_span_size;
+    }
+  }
+
+  // aggregate unused spans
+  for (size_t i = 0; i < heap->span_cache.count; ++i) {
+    span_t* cur_span = heap->span_cache.span[i];
+    if (cur_span) {
+      total_size += _memory_span_size;
+    }
+  }
+
+  // check for reserve
+  span_t* cur_span = heap->span_reserve_master;
+  if (cur_span) {
+      total_size += heap->spans_reserved * _memory_span_size;
+  }
+
+  // aggregate any in large cache
+  for (size_t i = 0; i < LARGE_CLASS_COUNT - 1; ++i) {
+    span_large_cache_t* cache = heap->span_large_cache + i;
+    for (size_t g = 0; g < cache->count; g++) {
+      cur_span = cache->span[g];
+      while (cur_span) {
+        total_size += cur_span->span_count * _memory_span_size;
+        cur_span = cur_span->next;
+      }
+    }
+  }
+
+ // last aggregate all fully utilized (large/huge) spans, there are no partials for this span class
+  cur_span = heap->large_huge_span;
+  while (cur_span) {
+    if (cur_span->size_class == SIZE_CLASS_LARGE) {
+      total_size += cur_span->span_count * _memory_span_size;
+    } else {
+      total_size += cur_span->span_count * _memory_page_size;
+    }
+    cur_span = cur_span->next;
+  }
   return total_size;
 }
 
