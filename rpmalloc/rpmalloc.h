@@ -497,7 +497,10 @@ struct rpmalloc_managed_heap {
 	rpmalloc_managed_heap(const rpmalloc_managed_heap& other)
 	{
 		storage_ = other.use_current_heap_on_copy() ? other.storage_ : other.storage_->heap_for_copy;
-		storage_->increment();
+
+		if (storage_) {
+			storage_->increment();
+		}
 	};
 
 	rpmalloc_managed_heap(rpmalloc_managed_heap&& other) = delete;
@@ -521,9 +524,14 @@ struct rpmalloc_managed_heap {
 		}
 
 		storage_ = other.use_current_heap_on_copy() ? other.storage_ : other.storage_->heap_for_copy;
-		storage_->increment();
+
+		if (storage_) {
+			storage_->increment();
+		}
 		return *this;
 	}
+
+	bool is_defined() const { return storage_ != nullptr; }
 
 	rpmalloc_heap_t* get() const { return storage_->active; }
 
