@@ -463,7 +463,7 @@ struct rpmalloc_ptr {
     }
 
     T* operator->() const {
-        return *value;
+        return value;
     }
 
     typename std::add_lvalue_reference<T> operator*() const {
@@ -566,21 +566,21 @@ struct rpmalloc_managed_heap {
 	}
 
 	template<typename T, typename... Args>
-	inline rpmalloc_ptr<T> make_raw(Args&&... args)
+	inline rpmalloc_ptr<T> make_raw(Args&&... args) const
 	{
 		 return rpmalloc_ptr<T>(
 			new(rpmalloc_heap_alloc(storage_->active, sizeof(T))) T(std::forward<Args>(args)...));
 	}
 
 	template<typename T, typename... Args>
-	inline rpmalloc_unique_ptr<T> make_unique(Args&&... args)
+	inline rpmalloc_unique_ptr<T> make_unique(Args&&... args) const
 	{
 		return std::unique_ptr<T, rpmalloc_deleter<T>>(
 			new(rpmalloc_heap_alloc(storage_->active, sizeof(T))) T(std::forward<Args>(args)...));
 	}
 
 	template<typename T, typename... Args>
-	inline std::shared_ptr<T> make_shared(Args&&... args)
+	inline std::shared_ptr<T> make_shared(Args&&... args) const
 	{
 		return std::shared_ptr<T>(
 			new(rpmalloc_heap_alloc(storage_->active, sizeof(T))) T(std::forward<Args>(args)...),
