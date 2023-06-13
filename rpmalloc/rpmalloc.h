@@ -456,7 +456,10 @@ struct rpmalloc_ptr {
 
     rpmalloc_ptr() : value(nullptr) {}
 
-    rpmalloc_ptr(T* ptr) : value(ptr) {}
+    explicit rpmalloc_ptr(T* ptr) : value(ptr) {}
+
+		template<typename U>
+    rpmalloc_ptr(const rpmalloc_ptr<U>& other) : value(other.value) {}
 
     T& operator[](std::size_t i) const {
         return value[i];
