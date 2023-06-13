@@ -442,6 +442,14 @@ template<class T1,class T2> bool operator!=(const rp_stl_allocator<T1>& , const 
 #include <utility>
 #include <stdexcept>
 
+template<typename T>
+struct rpmalloc_deleter {
+	void operator()(T* t) {
+		(*t).~T();
+		rpfree(t);
+	}
+};
+
 /** Provides container for managing a first class rmpalloc heap.
  *
  * By default the unique heap is empty (nullptr), it must be initialized with std::in_place_t to
@@ -512,9 +520,18 @@ struct rpmalloc_managed_heap {
 	}
 
 	template<typename T, typename... Args>
-	inline T* new_T(Args&&... args)
+	inline std::unique_ptr<T, rpmalloc_deleter<T>> make_unique(Args&&... args)
 	{
-		return new(rpmalloc_heap_alloc(storage_->active, sizeof(T))) T(std::forward<Args>(args)...);
+		return std::unique_ptr<T, rpmalloc_deleter<T>>(
+			new(rpmalloc_heap_alloc(storage_->active, sizeof(T))) T(std::forward<Args>(args)...));
+	}
+
+	template<typename T, typename... Args>
+	inline std::shared_ptr<T> make_shared(Args&&... args)
+	{
+		return std::shared_ptr<T>(
+			new(rpmalloc_heap_alloc(storage_->active, sizeof(T))) T(std::forward<Args>(args)...),
+			rpmalloc_deleter<T>());
 	}
 
 	size_t get_used_size() const {
