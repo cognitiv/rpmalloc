@@ -450,6 +450,33 @@ struct rpmalloc_deleter {
 	}
 };
 
+template <typename T>
+struct rpmalloc_ptr {
+    T* value;
+
+    rpmalloc_ptr() : value(nullptr) {}
+
+    rpmalloc_ptr(T* ptr) : value(ptr) {}
+
+    T& operator[](std::size_t i) const {
+        return value[i];
+    }
+
+    T* operator->() const {
+        return *value;
+    }
+
+    typename std::add_lvalue_reference<T> operator*() const {
+        return *value;
+    }
+
+    void reset() {
+        value->~T();
+        rpfree(value);
+        value = nullptr;
+    }
+};
+
 template<typename T>
 using rpmalloc_unique_ptr = std::unique_ptr<T, rpmalloc_deleter<T>>;
 
@@ -500,6 +527,14 @@ struct rpmalloc_managed_heap {
 
 	rpmalloc_heap_t* get() const { return storage_->active; }
 
+	rpmalloc_heap_t* copy_as() const {
+		if (storage_ && storage_->heap_for_copy) {
+			return storage_->heap_for_copy->active;
+		}
+
+		return nullptr;
+	}
+
 	void reset_copy() {
 		if (storage_ && storage_->heap_for_copy) {
 			storage_->heap_for_copy->decrement();
@@ -520,6 +555,13 @@ struct rpmalloc_managed_heap {
 		if (storage_->heap_for_copy) {
 			storage_->heap_for_copy->increment();
 		}
+	}
+
+	template<typename T, typename... Args>
+	inline rpmalloc_ptr<T> make_raw(Args&&... args)
+	{
+		 return rpmalloc_ptr<T>(
+			new(rpmalloc_heap_alloc(storage_->active, sizeof(T))) T(std::forward<Args>(args)...));
 	}
 
 	template<typename T, typename... Args>
