@@ -612,7 +612,7 @@ struct heap_t {
 #endif
 #if RPMALLOC_FIRST_CLASS_HEAPS
 	//! Allocation stats per size class
-	uint64_t size_class_current_use[SIZE_CLASS_COUNT + 1];
+	uint32_t size_class_current_use[SIZE_CLASS_COUNT + 1];
 #endif
 };
 
@@ -3611,7 +3611,7 @@ rpmalloc_heap_thread_set_current(rpmalloc_heap_t* heap) {
 extern inline size_t
 rpmalloc_heap_get_used_size(rpmalloc_heap_t* heap) {
 	size_t total_size = 0;
-  for (size_t i = 0; i < (sizeof(heap->size_class_current_use) / sizeof(uint64_t)); i++) {
+  for (size_t i = 0; i < (sizeof(heap->size_class_current_use) / sizeof(uint32_t)); i++) {
     if (heap->size_class_current_use[i] > 0) {
       total_size += heap->size_class_current_use[i] * _memory_size_class[i].block_size;
     }

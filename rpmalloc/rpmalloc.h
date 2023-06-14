@@ -483,6 +483,9 @@ struct rpmalloc_ptr {
 template<typename T>
 using rpmalloc_unique_ptr = std::unique_ptr<T, rpmalloc_deleter<T>>;
 
+struct rpmalloc_create_heap_t {
+};
+
 /** Provides container for managing a first class rmpalloc heap.
  *
  * By default the unique heap is empty (nullptr), it must be initialized with std::in_place_t to
@@ -494,7 +497,7 @@ using rpmalloc_unique_ptr = std::unique_ptr<T, rpmalloc_deleter<T>>;
 struct rpmalloc_managed_heap {
 	rpmalloc_managed_heap() = default;
 
-	explicit rpmalloc_managed_heap(std::in_place_t t)
+	explicit rpmalloc_managed_heap(rpmalloc_create_heap_t)
 		: storage_(new storage()) {}
 
 	rpmalloc_managed_heap(const rpmalloc_managed_heap& other)
