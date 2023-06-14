@@ -606,7 +606,7 @@ struct rpmalloc_managed_heap {
 		return 0;
 	}
 
-	bool is_equal(const rpmalloc_managed_heap& other) {
+	bool is_equal(const rpmalloc_managed_heap& other) const {
 		return storage_ == other.storage_;
 	}
 
