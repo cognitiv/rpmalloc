@@ -1087,6 +1087,7 @@ static void
 _rpmalloc_span_double_link_list_add(span_t** head, span_t* span) {
 	if (*head)
 		(*head)->prev = span;
+
 	span->next = *head;
 	*head = span;
 }
@@ -2265,8 +2266,9 @@ _rpmalloc_allocate_huge(heap_t* heap, size_t size) {
 	_rpmalloc_heap_cache_adopt_deferred(heap, 0);
 	size += SPAN_HEADER_SIZE;
 	size_t num_pages = size >> _memory_page_size_shift;
-	if (size & (_memory_page_size - 1))
+	if (size & (_memory_page_size - 1)) {
 		++num_pages;
+  }
 	size_t align_offset = 0;
 	span_t* span = (span_t*)_rpmalloc_mmap(num_pages * _memory_page_size, &align_offset);
 	if (!span)
@@ -3653,6 +3655,7 @@ rpmalloc_heap_get_total_size(rpmalloc_heap_t* heap) {
 
     // check for cached span (last span released)
     if (heap->size_class[i].cache) {
+      cur_span = heap->size_class[i].cache;
       total_size += _memory_span_size;
     }
   }
@@ -3675,11 +3678,7 @@ rpmalloc_heap_get_total_size(rpmalloc_heap_t* heap) {
   for (size_t i = 0; i < LARGE_CLASS_COUNT - 1; ++i) {
     span_large_cache_t* cache = heap->span_large_cache + i;
     for (size_t g = 0; g < cache->count; g++) {
-      cur_span = cache->span[g];
-      while (cur_span) {
-        total_size += cur_span->span_count * _memory_span_size;
-        cur_span = cur_span->next;
-      }
+        total_size += cache->span[g]->span_count * _memory_span_size;
     }
   }
 
