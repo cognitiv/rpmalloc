@@ -469,7 +469,7 @@ struct rpmalloc_ptr {
         return value;
     }
 
-    typename std::add_lvalue_reference<T> operator*() const {
+    T& operator*() const {
         return *value;
     }
 
