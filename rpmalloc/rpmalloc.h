@@ -606,6 +606,10 @@ struct rpmalloc_managed_heap {
 		return 0;
 	}
 
+	bool is_equal(const rpmalloc_managed_heap& other) {
+		return storage_ == other.storage_;
+	}
+
 private:
 	struct storage {
 		rpmalloc_heap_t* active;
@@ -670,7 +674,7 @@ template<class T> struct _rp_heap_stl_allocator_common : public _rp_stl_allocato
   #endif
 
   void collect(bool force) { }
-  template<class U> bool is_equal(const _rp_heap_stl_allocator_common<U>& x) const { return (heap_ == x.heap_); }
+  template<class U> bool is_equal(const _rp_heap_stl_allocator_common<U>& x) const { return heap_.is_equal(x.heap_); }
 
 protected:
   template<class U> friend struct _rp_heap_stl_allocator_common;
