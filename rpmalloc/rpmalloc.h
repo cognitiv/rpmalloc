@@ -482,16 +482,18 @@ struct rpmalloc_ptr {
 				value = nullptr;
 		}
 
-		rpmalloc_unique_ptr<T> to_unique() {
+		template<typename U = T>
+		rpmalloc_unique_ptr<U> to_unique() {
 			auto tmp = value;
 			value = nullptr;
-			return rpmalloc_unique_ptr<T>(tmp);
+			return rpmalloc_unique_ptr<U>(tmp);
 		}
 
-		std::shared_ptr<T> to_shared() {
+		template<typename U = T>
+		std::shared_ptr<U> to_shared() {
 			auto tmp = value;
 			value = nullptr;
-			return std::shared_ptr<T>(tmp, rpmalloc_deleter<T>());
+			return std::shared_ptr<U>(tmp, rpmalloc_deleter<U>());
 		}
 };
 
