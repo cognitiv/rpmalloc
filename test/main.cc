@@ -8,7 +8,7 @@ int main(int argc, char** argv) {
 #ifdef RPMALLOC_FIRST_CLASS_HEAPS
 	rpmalloc_initialize();
 
-	rpmalloc_managed_heap heap(std::in_place_t{});
+	rpmalloc_managed_heap heap(rpmalloc_create_heap_t{});
 	rp_heap_stl_allocator<int> alloc(heap);
 	std::vector<int, rp_heap_stl_allocator<int>> vec(alloc);
 
@@ -16,11 +16,12 @@ int main(int argc, char** argv) {
 		vec.push_back(i);
 	}
 	
-	rpmalloc_managed_heap other_heap(std::in_place_t{});
+	rpmalloc_managed_heap other_heap(rpmalloc_create_heap_t{});
 	heap.set_heap_for_copy(other_heap);
 
-	auto uptr = heap.make_raw<int>();
-	auto sptr = heap.make_shared<int>();
+	auto uptr = heap.make_raw<int>().to_unique();
+	auto sptr = heap.make_raw<int>().to_shared();
+	auto gptr = heap.make_shared<int>();
 
 	std::vector<int, rp_heap_stl_allocator<int>> copy = vec;
 	printf("%lu vs %lu | heap_used: %lu vs %lu, heap total: %lu vs %lu\n",
