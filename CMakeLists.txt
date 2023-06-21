@@ -3,7 +3,7 @@ project(rpmalloc
   VERSION 1.4.5
   DESCRIPTION "A library for efficient similarity search and clustering of dense vectors."
   HOMEPAGE_URL "Public domain cross platform lock free thread caching 16-byte aligned memory allocator implemented in C"
-  LANGUAGES CXX C)
+  LANGUAGES C CXX)
 include(GNUInstallDirs)
 
 set(CMAKE_C_STANDARD 11)

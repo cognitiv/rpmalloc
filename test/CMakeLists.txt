@@ -4,6 +4,5 @@ target_link_libraries(test-override rpmalloc)
 add_executable(test main.c thread.c)
 target_link_libraries(test rpmalloc)
 
-
-add_executable(test-fch main.cc)
+add_executable(test-fch main-stl.cc)
 target_link_libraries(test-fch rpmalloc)
